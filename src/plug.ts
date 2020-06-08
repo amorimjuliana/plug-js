@@ -1,16 +1,19 @@
-import {ExternalEvent, ExternalEventPayload, ExternalEventType} from '@croct/sdk/event';
-import {Logger} from '@croct/sdk/logging';
-import {JsonValue} from '@croct/sdk/json';
-import SessionFacade from '@croct/sdk/facade/sessionFacade';
-import UserFacade from '@croct/sdk/facade/userFacade';
-import Tracker from '@croct/sdk/facade/trackerFacade';
-import {EvaluationOptions} from '@croct/sdk/facade/evaluatorFacade';
 import Sdk, {Configuration as SdkFacadeConfiguration} from '@croct/sdk/facade/sdkFacade';
-import {formatCause} from '@croct/sdk/error';
-import {describe} from '@croct/sdk/validation';
 import {Optional} from '@croct/sdk/utilityTypes';
+import {
+    Tracker,
+    ExternalTrackingEvent as ExternalEvent,
+    ExternalTrackingEventPayload as ExternalEventPayload,
+    ExternalTrackingEventType as ExternalEventType,
+} from './sdk/tracking';
+import {Logger, SessionFacade, UserFacade} from './sdk';
+import {Token} from './sdk/token';
+import {JsonValue} from './sdk/json';
+import {Evaluator, EvaluationOptions} from './sdk/evaluation';
+import {describe, formatCause} from './sdk/validation';
 import {Plugin, PluginArguments, PluginFactory} from './plugin';
 import {CDN_URL} from './constants';
+import {factory as playgroundPluginFactory} from './playground';
 
 export interface PluginConfigurations {
     [key: string]: any;
@@ -61,7 +64,7 @@ function detectAppId(): string | null {
 }
 
 export class GlobalPlug implements Plug {
-    private pluginFactories: {[key: string]: PluginFactory} = {};
+    private pluginFactories: {[key: string]: PluginFactory} = {playground: playgroundPluginFactory};
 
     private instance?: Sdk;
 
@@ -134,7 +137,7 @@ export class GlobalPlug implements Plug {
 
         const pending: Promise<void>[] = [];
 
-        for (const [name, options] of Object.entries(plugins ?? {})) {
+        for (const [name, options] of Object.entries({playground: true, ...plugins})) {
             logger.debug(`Initializing plugin "${name}"...`);
 
             const factory = this.pluginFactories[name];
@@ -168,6 +171,12 @@ export class GlobalPlug implements Plug {
                     user: sdk.user,
                     session: sdk.session,
                     tab: sdk.context.getTab(),
+                    tokenStore: {
+                        getToken: sdk.getToken.bind(sdk),
+                        setToken: sdk.setToken.bind(sdk),
+                    },
+                    cidAssigner: sdk.cidAssigner,
+                    eventManager: sdk.eventManager,
                     getLogger: (...namespace: string[]): Logger => {
                         return sdk.getLogger(PLUGIN_NAMESPACE, name, ...namespace);
                     },
@@ -240,6 +249,10 @@ export class GlobalPlug implements Plug {
         return this.sdk.tracker;
     }
 
+    public get evaluator(): Evaluator {
+        return this.sdk.evaluator;
+    }
+
     public get user(): UserFacade {
         return this.sdk.user;
     }
@@ -265,7 +278,7 @@ export class GlobalPlug implements Plug {
     }
 
     public setToken(token: string): void {
-        this.sdk.setToken(token);
+        this.sdk.setToken(Token.parse(token));
     }
 
     public unsetToken(): void {
@@ -273,11 +286,11 @@ export class GlobalPlug implements Plug {
     }
 
     public track<T extends ExternalEventType>(type: T, payload: ExternalEventPayload<T>): Promise<ExternalEvent<T>> {
-        return this.sdk.track(type, payload);
+        return this.tracker.track(type, payload);
     }
 
     public evaluate(expression: string, options: EvaluationOptions = {}): Promise<JsonValue> {
-        return this.sdk.evaluate(expression, options);
+        return this.evaluator.evaluate(expression, options);
     }
 
     public async unplug(): Promise<void> {
