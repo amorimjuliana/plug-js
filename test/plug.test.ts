@@ -1,5 +1,6 @@
 import SdkFacade, {Configuration as SdkFacadeConfiguration} from '@croct/sdk/facade/sdkFacade';
 import {Logger} from '../src/sdk';
+import {Token} from '../src/sdk/token';
 import {Plugin, PluginFactory} from '../src/plugin';
 import {GlobalPlug} from '../src/plug';
 import {CDN_URL} from '../src/constants';
@@ -18,6 +19,11 @@ describe('The Croct plug', () => {
 
     beforeEach(() => {
         croct = new GlobalPlug();
+
+        Object.defineProperty(document, 'domain', {
+            configurable: true,
+            value: 'https://croct.com',
+        })
     });
 
     afterEach(async () => {
@@ -527,7 +533,7 @@ describe('The Croct plug', () => {
 
         croct.setToken(token);
 
-        expect(setToken).toBeCalledWith(token);
+        expect(setToken).toBeCalledWith(Token.parse(token));
     });
 
     test('should not allow to set a user token if unplugged', () => {
@@ -565,7 +571,7 @@ describe('The Croct plug', () => {
 
         expect(initialize).toBeCalledWith(config);
 
-        const track = jest.spyOn(sdkFacade, 'track').mockResolvedValue({
+        const track = jest.spyOn(sdkFacade.tracker, 'track').mockResolvedValue({
             type: 'userSignedUp',
             userId: 'c4r0l',
         });
@@ -589,7 +595,7 @@ describe('The Croct plug', () => {
 
         expect(initialize).toBeCalledWith(config);
 
-        const evaluate = jest.spyOn(sdkFacade, 'evaluate').mockResolvedValue('carol');
+        const evaluate = jest.spyOn(sdkFacade.evaluator, 'evaluate').mockResolvedValue('carol');
 
         const promise = croct.evaluate('user\'s name', {timeout: 5});
 

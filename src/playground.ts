@@ -48,16 +48,17 @@ export default class PlaygroundPlugin implements Plugin {
         this.updateToken = this.updateToken.bind(this);
     }
 
-    public async enable(): Promise<void> {
+    public enable(): Promise<void>|void {
         if (this.tab.referrer.startsWith(PLAYGROUND_ORIGIN)) {
             this.storage.setItem('playgroundEnabled', 'true');
         } else if (this.storage.getItem('playgroundEnabled') !== 'true') {
             return;
         }
 
-        this.sync(await this.cidAssigner.assignCid(), this.tokenProvider.getToken());
-
         this.eventSubscriber.addListener('tokenChanged', this.updateToken);
+
+        return this.cidAssigner.assignCid()
+            .then(cid => this.syncToken(cid, this.tokenProvider.getToken()));
     }
 
     public disable(): Promise<void> | void {
@@ -66,11 +67,11 @@ export default class PlaygroundPlugin implements Plugin {
 
     private updateToken(event: SdkEvent<'tokenChanged'>): Promise<void> {
         return this.cidAssigner.assignCid()
-            .then(cid => this.sync(cid, event.newToken))
+            .then(cid => this.syncToken(cid, event.newToken))
             .catch(error => this.logger.error(`Failed to assign CID: ${formatCause(error)}`));
     }
 
-    private sync(cid: string, token: Token|null): void {
+    private syncToken(cid: string, token: Token|null): void {
         const iframe = window.document.createElement('iframe');
         iframe.setAttribute('src', PLAYGROUND_ENDPOINT);
 
