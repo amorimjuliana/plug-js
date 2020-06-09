@@ -45,7 +45,7 @@ export default class PlaygroundPlugin implements Plugin {
         this.eventSubscriber = eventSubscriber;
         this.logger = logger;
 
-        this.handleTokenChange = this.handleTokenChange.bind(this);
+        this.updateToken = this.updateToken.bind(this);
     }
 
     public async enable(): Promise<void> {
@@ -55,22 +55,22 @@ export default class PlaygroundPlugin implements Plugin {
             return;
         }
 
-        this.notifyPlayground(await this.cidAssigner.assignCid(), this.tokenProvider.getToken());
+        this.sync(await this.cidAssigner.assignCid(), this.tokenProvider.getToken());
 
-        this.eventSubscriber.addListener('tokenChanged', this.handleTokenChange);
+        this.eventSubscriber.addListener('tokenChanged', this.updateToken);
     }
 
     public disable(): Promise<void> | void {
-        this.eventSubscriber.removeListener('tokenChanged', this.handleTokenChange);
+        this.eventSubscriber.removeListener('tokenChanged', this.updateToken);
     }
 
-    private handleTokenChange(event: SdkEvent<'tokenChanged'>): Promise<void> {
+    private updateToken(event: SdkEvent<'tokenChanged'>): Promise<void> {
         return this.cidAssigner.assignCid()
-            .then(cid => this.notifyPlayground(cid, event.newToken))
+            .then(cid => this.sync(cid, event.newToken))
             .catch(error => this.logger.error(`Failed to assign CID: ${formatCause(error)}`));
     }
 
-    private notifyPlayground(cid: string, token: Token|null): void {
+    private sync(cid: string, token: Token|null): void {
         const iframe = window.document.createElement('iframe');
         iframe.setAttribute('src', PLAYGROUND_ENDPOINT);
 
